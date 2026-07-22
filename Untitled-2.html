@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>TAB 악보 메이커 (다중 저장 및 목록 불러오기 기능 추가)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e24;
+            color: #ffffff;
+            margin: 0;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h2 { color: #f1c40f; margin-bottom: 5px; }
+        .desc { color: #aaa; font-size: 13px; margin-bottom: 20px; text-align: center; line-height: 1.5; }
+        .desc span { color: #f1c40f; font-weight: bold; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: #2c2c35;
+            padding: 12px 25px;
+            border-radius: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            align-items: center;
+            justify-content: center;
+        }
+
+        button.btn {
+            background: #3e3e4a;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button.btn:hover { background: #4e4e5a; }
+        button.btn-save { background: #27ae60; border: none; }
+        button.btn-save:hover { background: #2ecc71; }
+        button.btn-load { background: #2980b9; border: none; }
+        button.btn-load:hover { background: #3498db; }
+        button.btn-export { background: #8e44ad; border: none; }
+        button.btn-export:hover { background: #9b59b6; }
+        button.btn-clear { background: #c0392b; border: none; }
+        button.btn-clear:hover { background: #e74c3c; }
+
+        /* 🎯 저장된 악보 목록 모달 창 스타일 */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .modal-content {
+            background: #2c2c35;
+            border: 1px solid #444;
+            border-radius: 10px;
+            width: 450px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 15px 20px;
+            background: #363642;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #444;
+        }
+        .modal-header h3 { margin: 0; color: #f1c40f; font-size: 16px; }
+        .modal-close { background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; }
+        .modal-close:hover { color: #fff; }
+        .modal-body {
+            padding: 15px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .saved-sheet-card {
+            background: #3e3e4a;
+            border: 1px solid #555;
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .saved-sheet-card:hover {
+            background: #4e4e5a;
+            border-color: #f1c40f;
+        }
+        .sheet-info .sheet-title-text { font-weight: bold; color: #fff; font-size: 14px; margin-bottom: 4px; }
+        .sheet-info .sheet-date-text { font-size: 11px; color: #aaa; }
+        .card-actions { display: flex; gap: 6px; }
+        .btn-sm-load { background: #27ae60; border: none; color: #white; padding: 5px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+        .btn-sm-del { background: #c0392b; border: none; color: white; padding: 5px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+
+        .editor-workspace {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            position: relative;
+            width: 750px;
+        }
+
+        .symbol-toolbar {
+            width: 100px;
+            background: #2c2c35;
+            border: 1px solid #3d3d4e;
+            border-radius: 8px;
+            padding: 12px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            position: absolute;
+            left: -120px;
+            top: 0;
+            flex-shrink: 0;
+        }
+
+        .symbol-toolbar h4 {
+            margin: 0 0 2px 0;
+            font-size: 12px;
+            color: #f1c40f;
+            text-align: center;
+        }
+
+        .toggle-btn {
+            width: 100%;
+            background: #3e3e4a;
+            border: 1px solid #666;
+            color: #fff;
+            padding: 6px 0;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active {
+            background: #27ae60 !important;
+            border-color: #2ecc71 !important;
+            color: #fff !important;
+            box-shadow: 0 0 8px rgba(46, 204, 113, 0.6);
+        }
+
+        .symbol-item {
+            width: 80px;
+            height: 42px;
+            background: #3e3e4a;
+            border: 1px solid #555;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+            box-sizing: border-box;
+            padding: 4px;
+        }
+
+        .symbol-item:hover {
+            background: #4e4e5a;
+            border-color: #ffffff;
+            transform: scale(1.04);
+        }
+
+        .symbol-item img {
+            max-width: 100%;
+            max-height: 20px;
+            filter: brightness(0) invert(1);
+            object-fit: contain;
+            pointer-events: none;
+        }
+
+        .placed-symbol img {
+            width: 100%;
+            height: 100%;
+            filter: brightness(0) invert(1);
+            object-fit: fill;
+            pointer-events: none;
+            display: block;
+        }
+
+        .placed-symbol[data-type="H"] img,
+        .placed-symbol[data-type="P"] img {
+            object-fit: contain !important;
+        }
+
+        .symbol-item .sym-label {
+            font-size: 9px;
+            color: #aaa;
+            margin-top: 2px;
+        }
+
+        .center-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 750px;
+        }
+
+        .bottom-controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+
+        button.btn-add-bottom {
+            background: #2980b9;
+            border: none;
+            color: #fff;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: all 0.2s;
+            width: 100%;
+        }
+        button.btn-add-bottom:hover {
+            background: #3498db;
+            transform: translateY(-2px);
+        }
+
+        .sheet-paper {
+            width: 100%;
+            background-color: #2b2b36;
+            border: 2px solid #3d3d4e;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            padding: 50px 40px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            position: relative;
+            user-select: none;
+        }
+
+        .sheet-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        .sheet-header .tab-label { margin-right: 20px; color: #f1c40f; font-family: serif; }
+        .sheet-header .title-bracket { color: #ffffff; font-size: 24px; }
+
+        .title-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px dashed #777;
+            color: #ffffff;
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            width: 320px;
+            margin: 0 10px;
+            outline: none;
+        }
+        .title-input:focus { border-bottom: 1px solid #f1c40f; }
+
+        .tab-system {
+            margin-bottom: 35px;
+            position: relative;
+        }
+
+        .tab-staff {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 75px; 
+            position: relative;
+            background: transparent;
+        }
+
+        .measure-bars {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            justify-content: space-between;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .measure-bar { width: 1px; background-color: #888; height: 100%; pointer-events: none; }
+        .measure-bar:first-child, .measure-bar:last-child { width: 2px; background-color: #bbb; }
+
+        .measure-block {
+            flex: 1;
+            height: 100%;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+            transition: background 0.15s, border-color 0.15s;
+            pointer-events: none;
+        }
+
+        .measure-block.selected-block {
+            border: 2px solid #3498db !important;
+            background: rgba(52, 152, 219, 0.2) !important;
+        }
+
+        .tab-line {
+            width: 100%;
+            height: 14px;
+            position: relative;
+            z-index: 10;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .tab-line::before {
+            content: '';
+            position: absolute;
+            left: 0; right: 0; top: 50%;
+            height: 2px;
+            background-color: #777788;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .hover-guide {
+            position: fixed;
+            width: 14px;
+            height: 14px;
+            border: 1px dashed #f1c40f;
+            background: rgba(241, 196, 15, 0.25);
+            border-radius: 3px;
+            pointer-events: none;
+            display: none;
+            z-index: 999;
+            transform: translate(-50%, -50%);
+            box-sizing: border-box;
+        }
+
+        .fret-number-item {
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2b2b36; 
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 0px 2px;
+            min-width: 3px;
+            height: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2px;
+            line-height: 1;
+            z-index: 20;
+            user-select: none;
+            cursor: grab;
+            border: 1px solid transparent;
+            transition: border-color 0.15s, color 0.15s;
+        }
+
+        .fret-number-item.selected {
+            border-color: #f1c40f !important;
+            color: #f1c40f !important;
+            box-shadow: 0 0 6px rgba(241, 196, 15, 0.8);
+        }
+
+        .fret-number-item:hover {
+            border-color: #e74c3c;
+        }
+
+        .placed-symbol {
+            position: absolute;
+            z-index: 30;
+            user-select: none;
+            cursor: move;
+            box-sizing: border-box;
+        }
+
+        .placed-symbol .resize-handle {
+            position: absolute;
+            right: -3px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 6px;
+            background: #f1c40f;
+            border: 1px solid #000;
+            border-radius: 50%;
+            cursor: e-resize;
+            display: none;
+            z-index: 35;
+        }
+
+        .placed-symbol .v-resize-handle {
+            position: absolute;
+            right: -3px;
+            top: -3px;
+            width: 6px;
+            height: 6px;
+            background: #3498db;
+            border: 1px solid #000;
+            border-radius: 50%;
+            cursor: n-resize;
+            display: none;
+            z-index: 35;
+        }
+
+        .placed-symbol:hover {
+            outline: 1px dashed rgba(241, 196, 15, 0.8);
+        }
+
+        .placed-symbol:hover .resize-handle {
+            display: block;
+        }
+
+        .placed-symbol[data-type="BENDING"]:hover .v-resize-handle {
+            display: block;
+        }
+
+        .status-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            display: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>🎸 TAB 악보 메이커</h2>
+    <p class="desc">
+        - <b>첫 입력:</b> 빈 줄 <span>호버</span> 후 타이핑 | <b>하모닉스 토글:</b> 버튼으로 ON/OFF 후 숫자 입력<br>
+        - <b>기호 확장:</b> 벤딩 우측 상단 <span>파란 점</span>(세로) / 우측 <span>노란 점</span>(가로)<br>
+        - <b>기호 삭제:</b> 마우스 호버 후 <span>E</span> (또는 Alt + 클릭) | <b>뒤로가기:</b> <span>Ctrl + Z</span>
+    </p>
+
+    <div class="controls">
+        <button class="btn btn-save" onclick="saveTabSheet()">💾 브라우저에 저장</button>
+        <button class="btn btn-load" onclick="openLoadModal()">📂 목록 보기 및 불러오기</button>
+        <button class="btn btn-export" onclick="exportToImage()">🖼️ 이미지로 내보내기</button>
+        <button class="btn btn-clear" onclick="clearSheet()">🔄 전체 초기화</button>
+    </div>
+
+    <!-- 저장된 악보 목록 모달 창 -->
+    <div class="modal-overlay" id="load-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>저장된 악보 목록</h3>
+                <button class="modal-close" onclick="closeLoadModal()">✕</button>
+            </div>
+            <div class="modal-body" id="modal-sheet-list">
+                <!-- 목록이 동적으로 들어갑니다 -->
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-workspace">
+        
+        <div class="symbol-toolbar">
+            <h4>연주 기호</h4>
+            
+            <button class="toggle-btn" id="harmonics-toggle" onclick="toggleHarmonics()">
+                &lt;&gt; 하모닉스<br><span style="font-size: 9px; font-weight: normal;">(OFF)</span>
+            </button>
+
+            <div class="symbol-item" draggable="true" data-type="H">
+                <img src="images/h.png" alt="해머링">
+                <span class="sym-label">해머링</span>
+            </div>
+            
+            <div class="symbol-item" draggable="true" data-type="P">
+                <img src="images/p.png" alt="풀링">
+                <span class="sym-label">풀링</span>
+            </div>
+
+            <div class="symbol-item" draggable="true" data-type="BENDING">
+                <img src="images/bending.png" alt="벤딩">
+                <span class="sym-label">벤딩 (세로/가로)</span>
+            </div>
+
+            <div class="symbol-item" draggable="true" data-type="GLISS">
+                <img src="images/gliss.png" alt="글리산도" style="max-height: 12px;">
+                <span class="sym-label">글리산도 (가로확장)</span>
+            </div>
+
+            <div class="symbol-item" draggable="true" data-type="FERMATA">
+                <img src="images/fermata.png" alt="페르마타">
+                <span class="sym-label">페르마타</span>
+            </div>
+        </div>
+
+        <div class="center-wrapper">
+            <div class="sheet-paper" id="sheet-paper" ondragover="event.preventDefault()">
+                <div class="sheet-header">
+                    <span class="tab-label">TAB</span>
+                    <span class="title-bracket">[</span>
+                    <input type="text" class="title-input" id="sheet-title" placeholder="곡 제목을 입력하세요">
+                    <span class="title-bracket">]</span>
+                </div>
+
+                <div id="staff-container"></div>
+            </div>
+
+            <div class="bottom-controls">
+                <button class="btn-add-bottom" onclick="addSystem()">➕ 악보 1단 추가</button>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="toast" class="status-toast"></div>
+
+    <script>
+        const INITIAL_SYSTEM_COUNT = 8;
+        const MEASURE_COUNT = 4;
+        let systemCounter = 0;
+
+        let currentHoverLine = null;
+        let currentHoverPercent = 0;
+        let hoverGuideEl = null;
+
+        let selectedItem = null;
+        let inputBuffer = "";
+        let inputTimer = null;
+
+        let isHarmonicsMode = false;
+
+        let selectedMeasureBlock = null; 
+        let copiedMeasureData = null;    
+
+        let historyStack = [];
+        const MAX_HISTORY = 30;
+
+        const SYMBOL_IMAGES = {
+            'H': 'images/h.png',
+            'P': 'images/p.png',
+            'BENDING': 'images/bending.png',
+            'GLISS': 'images/gliss.png',
+            'FERMATA': 'images/fermata.png'
+        };
+
+        function toggleHarmonics() {
+            isHarmonicsMode = !isHarmonicsMode;
+            const btn = document.getElementById('harmonics-toggle');
+            if (isHarmonicsMode) {
+                btn.classList.add('active');
+                btn.innerHTML = `&lt;&gt; 하모닉스<br><span style="font-size: 9px; font-weight: normal;">(ON)</span>`;
+                showToast('하모닉스 모드 활성화 (<숫자>)');
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = `&lt;&gt; 하모닉스<br><span style="font-size: 9px; font-weight: normal;">(OFF)</span>`;
+                showToast('하모닉스 모드 해제');
+            }
+        }
+
+        function recordHistory() {
+            const items = document.querySelectorAll('.fret-number-item');
+            const symbols = document.querySelectorAll('.placed-symbol');
+            
+            const itemData = [];
+            items.forEach(item => {
+                const line = item.parentElement;
+                itemData.push({
+                    sys: line.dataset.sys,
+                    str: line.dataset.str,
+                    left: item.style.left,
+                    top: item.style.top,
+                    val: item.innerText
+                });
+            });
+
+            const symbolData = [];
+            symbols.forEach(sym => {
+                symbolData.push({
+                    left: sym.style.left,
+                    top: sym.style.top,
+                    width: sym.style.width || '50px',
+                    height: sym.style.height || '25px',
+                    type: sym.dataset.type
+                });
+            });
+
+            historyStack.push({ items: itemData, symbols: symbolData });
+            if (historyStack.length > MAX_HISTORY) historyStack.shift();
+        }
+
+        function undo() {
+            if (historyStack.length === 0) {
+                showToast("더 이상 되돌릴 작업이 없습니다.");
+                return;
+            }
+            const lastState = historyStack.pop();
+            
+            document.querySelectorAll('.fret-number-item').forEach(i => i.remove());
+            document.querySelectorAll('.placed-symbol').forEach(s => s.remove());
+            clearSelection();
+            clearMeasureSelection();
+
+            lastState.items.forEach(item => {
+                const selector = `.tab-line[data-sys="${item.sys}"][data-str="${item.str}"]`;
+                const lineDiv = document.querySelector(selector);
+                if (lineDiv) {
+                    const leftPercent = parseFloat(item.left);
+                    const newItem = createFretItem(lineDiv, leftPercent, item.val, false);
+                    if (item.top) newItem.style.top = item.top;
+                }
+            });
+
+            lastState.symbols.forEach(sym => {
+                createSymbolElement(sym.left, sym.top, sym.type, sym.width, sym.height, false);
+            });
+
+            showToast("실행 취소 (Ctrl+Z) 적용됨");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 1800);
+        }
+
+        function initSheet() {
+            const container = document.getElementById('staff-container');
+            container.innerHTML = '';
+            systemCounter = 0;
+
+            hoverGuideEl = document.createElement('div');
+            hoverGuideEl.className = 'hover-guide';
+            document.body.appendChild(hoverGuideEl);
+
+            for (let sys = 0; sys < INITIAL_SYSTEM_COUNT; sys++) {
+                createSystemElement();
+            }
+
+            setupToolbarDragAndDrop();
+        }
+
+        function createSystemElement() {
+            const container = document.getElementById('staff-container');
+            const sys = systemCounter++;
+
+            const systemDiv = document.createElement('div');
+            systemDiv.className = 'tab-system';
+            systemDiv.dataset.sys = sys;
+
+            const staffDiv = document.createElement('div');
+            staffDiv.className = 'tab-staff';
+
+            const barsDiv = document.createElement('div');
+            barsDiv.className = 'measure-bars';
+
+            for (let b = 0; b < MEASURE_COUNT; b++) {
+                if (b === 0) {
+                    const startBar = document.createElement('div');
+                    startBar.className = 'measure-bar';
+                    barsDiv.appendChild(startBar);
+                }
+
+                const block = document.createElement('div');
+                block.className = 'measure-block';
+                block.dataset.sys = sys;
+                block.dataset.mIdx = b;
+
+                block.addEventListener('mousedown', (e) => {
+                    if (!e.altKey) e.stopPropagation();
+                });
+
+                barsDiv.appendChild(block);
+
+                const endBar = document.createElement('div');
+                endBar.className = 'measure-bar';
+                barsDiv.appendChild(endBar);
+            }
+            staffDiv.appendChild(barsDiv);
+
+            for (let str = 0; str < 6; str++) {
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'tab-line';
+                lineDiv.dataset.sys = sys;
+                lineDiv.dataset.str = str;
+
+                lineDiv.addEventListener('mousemove', (e) => {
+                    currentHoverLine = lineDiv;
+                    const rect = lineDiv.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    currentHoverPercent = (clickX / rect.width) * 100;
+
+                    const lineCenterY = rect.top + (rect.height / 2);
+                    hoverGuideEl.style.display = 'block';
+                    hoverGuideEl.style.left = `${e.clientX}px`;
+                    hoverGuideEl.style.top = `${lineCenterY}px`;
+                });
+
+                lineDiv.addEventListener('mouseleave', () => {
+                    currentHoverLine = null;
+                    hoverGuideEl.style.display = 'none';
+                });
+
+                lineDiv.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                });
+
+                lineDiv.addEventListener('click', (e) => {
+                    if (e.altKey) {
+                        e.stopPropagation();
+                        const clickX = e.clientX - lineDiv.getBoundingClientRect().left;
+                        const pct = clickX / lineDiv.getBoundingClientRect().width;
+                        const mIdx = Math.floor(pct * MEASURE_COUNT);
+                        const block = barsDiv.querySelectorAll('.measure-block')[mIdx];
+                        if (block) selectMeasureBlock(block, sys, mIdx);
+                    }
+                });
+
+                staffDiv.appendChild(lineDiv);
+            }
+
+            systemDiv.appendChild(staffDiv);
+            container.appendChild(systemDiv);
+        }
+
+        function addSystem() {
+            createSystemElement();
+            showToast('악보 1단이 추가되었습니다.');
+        }
+
+        function setupToolbarDragAndDrop() {
+            const paper = document.getElementById('sheet-paper');
+            const toolbarItems = document.querySelectorAll('.symbol-item');
+
+            toolbarItems.forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', item.dataset.type);
+                });
+            });
+
+            paper.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+
+            paper.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const symType = e.dataTransfer.getData('text/plain');
+                if (!symType) return;
+
+                const rect = paper.getBoundingClientRect();
+                const dropX = e.clientX - rect.left;
+                const dropY = e.clientY - rect.top;
+
+                let initWidth = '50px';
+                let initHeight = '25px';
+
+                if (symType === 'GLISS') {
+                    initWidth = '28px'; 
+                    initHeight = '16px'; 
+                } else if (symType === 'H') {
+                    initWidth = '10px';  
+                    initHeight = '20px'; 
+                } else if (symType === 'P') {
+                    initWidth = '10px';  
+                    initHeight = '20px'; 
+                } else if (symType === 'FERMATA') {
+                    initWidth = '25px';  
+                    initHeight = '10px'; 
+                } else if (symType !== 'BENDING') {
+                    initWidth = '10px';
+                    initHeight = '16px';
+                }
+
+                createSymbolElement(`${dropX}px`, `${dropY}px`, symType, initWidth, initHeight);
+            });
+        }
+
+        function createSymbolElement(left, top, type, width = '50px', height = '25px', shouldRecord = true) {
+            if (shouldRecord) recordHistory();
+
+            const paper = document.getElementById('sheet-paper');
+            const sym = document.createElement('div');
+            sym.className = 'placed-symbol';
+            sym.dataset.type = type;
+            sym.style.left = left;
+            sym.style.top = top;
+            sym.style.width = width;
+            sym.style.height = height;
+
+            const img = document.createElement('img');
+            img.src = SYMBOL_IMAGES[type] || 'images/h.png';
+            sym.appendChild(img);
+
+            let handle = null;
+            if (type !== 'H' && type !== 'P') {
+                handle = document.createElement('div');
+                handle.className = 'resize-handle';
+                sym.appendChild(handle);
+            }
+
+            let vHandle = null;
+            if (type === 'BENDING') {
+                vHandle = document.createElement('div');
+                vHandle.className = 'v-resize-handle';
+                sym.appendChild(vHandle);
+            }
+
+            sym.addEventListener('click', (e) => {
+                if (e.altKey) {
+                    e.stopPropagation();
+                    recordHistory();
+                    sym.remove();
+                    showToast('연주 기호가 삭제되었습니다.');
+                }
+            });
+
+            sym.addEventListener('mousedown', (e) => {
+                if ((handle && e.target === handle) || (vHandle && e.target === vHandle) || e.altKey) return;
+                e.stopPropagation();
+                recordHistory();
+
+                const paperRect = paper.getBoundingClientRect();
+                const symRect = sym.getBoundingClientRect();
+                const offsetX = e.clientX - symRect.left;
+                const offsetY = e.clientY - symRect.top;
+
+                const onMouseMove = (moveEvent) => {
+                    let newX = moveEvent.clientX - paperRect.left - offsetX;
+                    let newY = moveEvent.clientY - paperRect.top - offsetY;
+                    sym.style.left = `${newX}px`;
+                    sym.style.top = `${newY}px`;
+                };
+
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            if (handle) {
+                handle.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    recordHistory();
+
+                    const startX = e.clientX;
+                    const startWidth = sym.offsetWidth;
+
+                    const onResizeMove = (moveEvent) => {
+                        const diffX = moveEvent.clientX - startX;
+                        const newWidth = Math.max(15, startWidth + diffX);
+                        sym.style.width = `${newWidth}px`;
+                    };
+
+                    const onResizeUp = () => {
+                        document.removeEventListener('mousemove', onResizeMove);
+                        document.removeEventListener('mouseup', onResizeUp);
+                    };
+
+                    document.addEventListener('mousemove', onResizeMove);
+                    document.addEventListener('mouseup', onResizeUp);
+                });
+            }
+
+            if (vHandle) {
+                vHandle.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    recordHistory();
+
+                    const startY = e.clientY;
+                    const startHeight = sym.offsetHeight;
+                    const startTop = sym.offsetTop;
+
+                    const onVResizeMove = (moveEvent) => {
+                        const diffY = startY - moveEvent.clientY;
+                        const newHeight = Math.max(15, startHeight + diffY);
+                        const newTop = startTop - (newHeight - startHeight);
+
+                        sym.style.height = `${newHeight}px`;
+                        sym.style.top = `${newTop}px`;
+                    };
+
+                    const onVResizeUp = () => {
+                        document.removeEventListener('mousemove', onVResizeMove);
+                        document.removeEventListener('mouseup', onVResizeUp);
+                    };
+
+                    document.addEventListener('mousemove', onVResizeMove);
+                    document.addEventListener('mouseup', onVResizeUp);
+                });
+            }
+
+            paper.appendChild(sym);
+        }
+
+        function selectMeasureBlock(element, sys, mIdx) {
+            clearSelection();
+            if (selectedMeasureBlock && selectedMeasureBlock.element) {
+                selectedMeasureBlock.element.classList.remove('selected-block');
+            }
+            selectedMeasureBlock = { element, sys, mIdx };
+            element.classList.add('selected-block');
+            showToast(`${mIdx + 1}번째 마디 선택됨 (E 누르면 삭제)`);
+        }
+
+        function clearMeasureSelection() {
+            if (selectedMeasureBlock && selectedMeasureBlock.element) {
+                selectedMeasureBlock.element.classList.remove('selected-block');
+            }
+            selectedMeasureBlock = null;
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('fret-number-item') && !e.altKey) {
+                clearSelection();
+                clearMeasureSelection();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement.tagName === 'INPUT') return;
+
+            const key = e.key;
+            const code = e.code;
+
+            if ((e.ctrlKey || e.metaKey) && (code === 'KeyZ' || key.toLowerCase() === 'z')) {
+                e.preventDefault();
+                undo();
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && (code === 'KeyC' || key.toLowerCase() === 'c')) {
+                if (selectedMeasureBlock) {
+                    e.preventDefault();
+                    copySelectedMeasure();
+                }
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && (code === 'KeyV' || key.toLowerCase() === 'v')) {
+                if (selectedMeasureBlock && copiedMeasureData) {
+                    e.preventDefault();
+                    pasteToSelectedMeasure();
+                }
+                return;
+            }
+
+            if (code === 'KeyE' || key.toUpperCase() === 'E' || key === 'ㄷ' || key === 'Delete' || key === 'Backspace') {
+                e.preventDefault();
+                handleDeleteKey();
+            }
+            else if ((key >= '0' && key <= '9') || key.toUpperCase() === 'X' || key === 'ㅌ' || code === 'KeyX') {
+                e.preventDefault();
+                let inputChar = key;
+                if (code === 'KeyX' || key === 'ㅌ') inputChar = 'X';
+                handleInputKey(inputChar);
+            } 
+        });
+
+        function copySelectedMeasure() {
+            if (!selectedMeasureBlock) return;
+            const { sys, mIdx } = selectedMeasureBlock;
+            const startPct = (mIdx / MEASURE_COUNT) * 100;
+            const endPct = ((mIdx + 1) / MEASURE_COUNT) * 100;
+
+            const systemDiv = document.querySelector(`.tab-system[data-sys="${sys}"]`);
+            const items = systemDiv.querySelectorAll('.fret-number-item');
+
+            copiedMeasureData = [];
+            items.forEach(item => {
+                const line = item.parentElement;
+                const leftPct = parseFloat(item.style.left);
+
+                if (leftPct >= startPct - 0.1 && leftPct <= endPct + 0.1) {
+                    const relativePct = ((leftPct - startPct) / (endPct - startPct)) * 100;
+                    copiedMeasureData.push({
+                        str: line.dataset.str,
+                        relativePct: relativePct,
+                        val: item.innerText
+                    });
+                }
+            });
+
+            showToast(`마디 복사 완료! (${copiedMeasureData.length}개 노트)`);
+        }
+
+        function pasteToSelectedMeasure() {
+            if (!selectedMeasureBlock || !copiedMeasureData) return;
+            recordHistory();
+
+            const { sys, mIdx } = selectedMeasureBlock;
+            const startPct = (mIdx / MEASURE_COUNT) * 100;
+            const measureWidthPct = (1 / MEASURE_COUNT) * 100;
+
+            const systemDiv = document.querySelector(`.tab-system[data-sys="${sys}"]`);
+
+            const items = systemDiv.querySelectorAll('.fret-number-item');
+            const endPct = startPct + measureWidthPct;
+            items.forEach(item => {
+                const leftPct = parseFloat(item.style.left);
+                if (leftPct >= startPct - 0.1 && leftPct <= endPct + 0.1) {
+                    item.remove();
+                }
+            });
+
+            copiedMeasureData.forEach(node => {
+                const targetLine = systemDiv.querySelector(`.tab-line[data-str="${node.str}"]`);
+                if (targetLine) {
+                    const targetLeftPct = startPct + (node.relativePct * measureWidthPct / 100);
+                    createFretItem(targetLine, targetLeftPct, node.val, false);
+                }
+            });
+
+            showToast('마디 붙여넣기 완료!');
+        }
+
+        function handleInputKey(char) {
+            let formattedVal = char;
+            if (isHarmonicsMode && char !== 'X') {
+                formattedVal = `<${char}>`;
+            }
+
+            if (selectedItem) {
+                recordHistory();
+                if (inputBuffer === "") {
+                    inputBuffer = char;
+                } else {
+                    inputBuffer += char;
+                }
+
+                if (inputBuffer !== 'X' && parseInt(inputBuffer) > 20) {
+                    inputBuffer = '20';
+                }
+
+                selectedItem.innerText = isHarmonicsMode ? `<${inputBuffer}>` : inputBuffer;
+                resetInputTimer();
+                return;
+            }
+
+            if (currentHoverLine) {
+                recordHistory();
+                if (inputBuffer === "") {
+                    const newItem = createFretItem(currentHoverLine, currentHoverPercent, formattedVal, false);
+                    selectItem(newItem);
+                    inputBuffer = char;
+                } else {
+                    inputBuffer += char;
+                    if (inputBuffer !== 'X' && parseInt(inputBuffer) > 20) {
+                        inputBuffer = '20';
+                    }
+                    if (selectedItem) {
+                        selectedItem.innerText = isHarmonicsMode ? `<${inputBuffer}>` : inputBuffer;
+                    }
+                }
+
+                resetInputTimer();
+            }
+        }
+
+        function resetInputTimer() {
+            clearTimeout(inputTimer);
+            inputTimer = setTimeout(() => {
+                clearSelection();
+            }, 600); 
+        }
+
+        function selectItem(item) {
+            clearSelection();
+            clearMeasureSelection();
+            selectedItem = item;
+            selectedItem.classList.add('selected');
+        }
+
+        function clearSelection() {
+            if (selectedItem) {
+                selectedItem.classList.remove('selected');
+            }
+            selectedItem = null;
+            inputBuffer = "";
+            clearTimeout(inputTimer);
+        }
+
+        function handleDeleteKey() {
+            if (selectedMeasureBlock) {
+                recordHistory();
+                const { sys, mIdx } = selectedMeasureBlock;
+                const startPct = (mIdx / MEASURE_COUNT) * 100;
+                const measureWidthPct = (1 / MEASURE_COUNT) * 100;
+                const endPct = startPct + measureWidthPct;
+
+                const systemDiv = document.querySelector(`.tab-system[data-sys="${sys}"]`);
+                const items = systemDiv.querySelectorAll('.fret-number-item');
+
+                let count = 0;
+                items.forEach(item => {
+                    const leftPct = parseFloat(item.style.left);
+                    if (leftPct >= startPct - 0.1 && leftPct <= endPct + 0.1) {
+                        item.remove();
+                        count++;
+                    }
+                });
+
+                showToast(`선택한 마디의 숫자 ${count}개가 삭제되었습니다.`);
+                clearMeasureSelection();
+                return;
+            }
+
+            if (selectedItem) {
+                recordHistory();
+                selectedItem.remove();
+                clearSelection();
+                return;
+            }
+
+            const hoveredSymbol = document.querySelector('.placed-symbol:hover');
+            if (hoveredSymbol) {
+                recordHistory();
+                hoveredSymbol.remove();
+                showToast('연주 기호가 삭제되었습니다.');
+                return;
+            }
+
+            if (currentHoverLine) {
+                const existing = findExistingItemNear(currentHoverLine, currentHoverPercent);
+                if (existing) {
+                    recordHistory();
+                    existing.remove();
+                }
+            }
+        }
+
+        function findExistingItemNear(lineElement, targetPercent) {
+            const items = lineElement.querySelectorAll('.fret-number-item');
+            for (let item of items) {
+                const itemLeft = parseFloat(item.style.left);
+                if (Math.abs(itemLeft - targetPercent) < 3.5) {
+                    return item;
+                }
+            }
+            return null;
+        }
+
+        function createFretItem(lineElement, leftPercent, val, shouldRecord = true) {
+            if (shouldRecord) recordHistory();
+
+            const item = document.createElement('div');
+            item.className = 'fret-number-item';
+            item.innerText = val;
+            item.style.left = `${leftPercent}%`;
+
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectItem(item);
+            });
+
+            item.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+
+                const rect = lineElement.getBoundingClientRect();
+                const itemRect = item.getBoundingClientRect();
+                const offsetX = e.clientX - itemRect.left;
+
+                const onMouseMove = (moveEvent) => {
+                    let currentX = moveEvent.clientX - rect.left - offsetX + (item.offsetWidth / 2);
+                    let newPercent = (currentX / rect.width) * 100;
+                    if (newPercent < 0) newPercent = 0;
+                    if (newPercent > 100) newPercent = 100;
+
+                    item.style.left = `${newPercent}%`;
+                };
+
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+
+            lineElement.appendChild(item);
+            return item;
+        }
+
+        // 🎯 다중 저장 기능
+        function saveTabSheet() {
+            clearSelection();
+            clearMeasureSelection();
+            const titleInput = document.getElementById('sheet-title');
+            const title = titleInput.value.trim() || '제목 없는 악보';
+            
+            const items = document.querySelectorAll('.fret-number-item');
+            const symbols = document.querySelectorAll('.placed-symbol');
+            
+            const data = [];
+            items.forEach(item => {
+                const line = item.parentElement;
+                data.push({
+                    sys: line.dataset.sys,
+                    str: line.dataset.str,
+                    left: item.style.left,
+                    top: item.style.top,
+                    val: item.innerText
+                });
+            });
+
+            const symbolData = [];
+            symbols.forEach(sym => {
+                symbolData.push({
+                    left: sym.style.left,
+                    top: sym.style.top,
+                    width: sym.style.width || '50px',
+                    height: sym.style.height || '25px',
+                    type: sym.dataset.type
+                });
+            });
+
+            const sheetObj = {
+                id: 'sheet_' + Date.now(),
+                title: title,
+                date: new Date().toLocaleString(),
+                data: data,
+                symbols: symbolData,
+                sysCount: systemCounter
+            };
+
+            let allSheets = JSON.parse(localStorage.getItem('my_tab_sheets_list') || '[]');
+            
+            // 동일한 이름이 있으면 업데이트 또는 새 슬롯으로 추가
+            allSheets.push(sheetObj);
+            localStorage.setItem('my_tab_sheets_list', JSON.stringify(allSheets));
+
+            showToast(`"${title}" 저장 완료!`);
+        }
+
+        // 🎯 목록 불러오기 모달 열기
+        function openLoadModal() {
+            const listContainer = document.getElementById('modal-sheet-list');
+            listContainer.innerHTML = '';
+
+            let allSheets = JSON.parse(localStorage.getItem('my_tab_sheets_list') || '[]');
+
+            if (allSheets.length === 0) {
+                listContainer.innerHTML = `<div style="text-align: center; color: #888; padding: 20px;">저장된 악보가 없습니다.</div>`;
+            } else {
+                allSheets.forEach((sheet, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'saved-sheet-card';
+                    card.innerHTML = `
+                        <div class="sheet-info" onclick="loadSpecificSheet('${sheet.id}')" style="flex: 1; cursor: pointer;">
+                            <div class="sheet-title-text">🎵 ${sheet.title}</div>
+                            <div class="sheet-date-text">저장일시: ${sheet.date || '알 수 없음'} (노트: ${sheet.data.length}개)</div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn-sm-load" onclick="loadSpecificSheet('${sheet.id}')">불러오기</button>
+                            <button class="btn-sm-del" onclick="deleteSpecificSheet('${sheet.id}', event)">삭제</button>
+                        </div>
+                    `;
+                    listContainer.appendChild(card);
+                });
+            }
+
+            document.getElementById('load-modal').style.display = 'flex';
+        }
+
+        function closeLoadModal() {
+            document.getElementById('load-modal').style.display = 'none';
+        }
+
+        // 🎯 특정 악보 불러오기
+        function loadSpecificSheet(id) {
+            let allSheets = JSON.parse(localStorage.getItem('my_tab_sheets_list') || '[]');
+            const found = allSheets.find(s => s.id === id);
+            if (!found) {
+                alert('해당 악보를 찾을 수 없습니다.');
+                return;
+            }
+
+            clearSheet(false);
+            document.getElementById('sheet-title').value = found.title || '';
+
+            const targetSysCount = found.sysCount || INITIAL_SYSTEM_COUNT;
+            while (systemCounter < targetSysCount) {
+                createSystemElement();
+            }
+
+            found.data.forEach(item => {
+                const selector = `.tab-line[data-sys="${item.sys}"][data-str="${item.str}"]`;
+                const lineDiv = document.querySelector(selector);
+                if (lineDiv) {
+                    const leftPercent = parseFloat(item.left);
+                    const newItem = createFretItem(lineDiv, leftPercent, item.val, false);
+                    if (item.top) newItem.style.top = item.top;
+                }
+            });
+
+            if (found.symbols) {
+                found.symbols.forEach(sym => {
+                    createSymbolElement(sym.left, sym.top, sym.type, sym.width, sym.height, false);
+                });
+            }
+
+            closeLoadModal();
+            showToast(`"${found.title}" 불러오기 완료!`);
+        }
+
+        // 🎯 특정 악보 삭제
+        function deleteSpecificSheet(id, event) {
+            event.stopPropagation();
+            if (!confirm('정말 이 악보를 삭제하시겠습니까?')) return;
+
+            let allSheets = JSON.parse(localStorage.getItem('my_tab_sheets_list') || '[]');
+            allSheets = allSheets.filter(s => s.id !== id);
+            localStorage.setItem('my_tab_sheets_list', JSON.stringify(allSheets));
+            
+            openLoadModal(); // 목록 새로고침
+            showToast('악보가 삭제되었습니다.');
+        }
+
+        function clearSheet(confirmMsg = true) {
+            clearSelection();
+            clearMeasureSelection();
+            if (!confirmMsg || confirm('작성 중인 내용이 모두 삭제됩니다. 초기화하시겠습니까?')) {
+                document.getElementById('sheet-title').value = '';
+                document.querySelectorAll('.fret-number-item').forEach(i => i.remove());
+                document.querySelectorAll('.placed-symbol').forEach(s => s.remove());
+            }
+        }
+
+        function exportToImage() {
+            clearSelection();
+            clearMeasureSelection();
+            const sheet = document.getElementById('sheet-paper');
+            const title = document.getElementById('sheet-title').value || 'TAB_Sheet';
+
+            html2canvas(sheet, {
+                backgroundColor: '#2b2b36',
+                scale: 2
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `${title}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        }
+
+        initSheet();
+    </script>
+</body>
+</html>
