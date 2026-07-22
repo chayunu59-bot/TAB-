@@ -206,10 +206,19 @@
             display: block;
         }
 
-        .placed-symbol[data-type="H"] img,
-        .placed-symbol[data-type="P"] img {
-            object-fit: contain !important;
-        }
+        /* 해머링(H) 이미지 크기 지정 */
+.placed-symbol[data-type="H"] img {
+    object-fit: contain !important;
+    width: 10px !important;  /* 👈 원하시는 가로 크기 */
+    height: 15px !important; /* 👈 원하시는 세로 크기 */
+}
+
+/* 풀링(P) 이미지 크기 지정 */
+.placed-symbol[data-type="P"] img {
+    object-fit: contain !important;
+    width: 10px !important;  /* 👈 원하시는 가로 크기 (여기 숫자를 줄여보세요) */
+    height: 15px !important; /* 👈 원하시는 세로 크기 (여기 숫자를 줄여보세요) */
+}
 
         .symbol-item .sym-label {
             font-size: 9px;
@@ -369,7 +378,7 @@
             transform: translate(-50%, -50%);
             background-color: #2b2b36; 
             color: #ffffff;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: bold;
             padding: 0px 2px;
             min-width: 3px;
